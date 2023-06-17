@@ -61,6 +61,6 @@ jobs:
           push: true
           file: docker/Dockerfile
           tags: |
-            pawbsocial/lemmy:${{ steps.git_info.outputs.branch }}.${{ steps.git_info.outputs.sha_short }}
-            pawbsocial/lemmy:${{ steps.git_info.outputs.branch }}.latest
+            ghcr.io/pawbsocial/lemmy:${{ steps.git_info.outputs.branch }}.${{ steps.git_info.outputs.sha_short }}
+            ghcr.io/pawbsocial/lemmy:${{ steps.git_info.outputs.branch }}.latest
           labels: ${{ steps.meta.outputs.labels }}
