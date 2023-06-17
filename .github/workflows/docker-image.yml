@@ -22,8 +22,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
-        with:
-          path: 'lemmy'
           
       - name: Checkout repository
         uses: actions/checkout@v3
@@ -47,8 +45,8 @@ jobs:
       - name: Build and push Docker image
         uses: docker/build-push-action@f2a1d5e99d037542a71f64918e516c093c6f3fc4
         with:
-          context: ./lemmy
+          context: .
           push: true
-          file: lemmy/docker/Dockerfile
+          file: docker/Dockerfile
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
