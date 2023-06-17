@@ -32,11 +32,27 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata (tags, labels) for Docker
-        id: meta
-        uses: docker/metadata-action@9ec57ed1fcdbf14dcef7dfbe97b2010124a938b7
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+      - name: Grab git info and put it in outputs and files
+        id: git_info
+        run: |
+          BRANCH_NAME="$GITHUB_REF_NAME"
+          if [ ! -z "$GITHUB_BASE_REF" ]
+          then
+            BRANCH_NAME="$GITHUB_BASE_REF"
+          fi
+
+          echo "$BRANCH_NAME" > build-id
+          echo "::set-output name=branch::${BRANCH_NAME//\//-}"
+
+          GITHUB_SHA_SHORT="$(git rev-parse --short HEAD | tr -d "\r\n\t ")"
+          echo "$GITHUB_SHA_SHORT" > git-commit-id
+
+          echo -n "Build ID: "
+          cat build-id
+          echo -n "Git commit ID: "
+          cat git-commit-id
+
+          echo "::set-output name=sha_short::$GITHUB_SHA_SHORT"
 
       - name: Build and push Docker image
         uses: docker/build-push-action@f2a1d5e99d037542a71f64918e516c093c6f3fc4
@@ -44,5 +60,7 @@ jobs:
           context: .
           push: true
           file: docker/Dockerfile
-          tags: ${{ steps.meta.outputs.tags }}
+          tags: |
+            pawbsocial/lemmy:${{ steps.git_info.outputs.branch }}.${{ steps.git_info.outputs.sha_short }}
+            pawbsocial/lemmy:${{ steps.git_info.outputs.branch }}.latest
           labels: ${{ steps.meta.outputs.labels }}
