@@ -2,10 +2,9 @@ name: Publish Docker Image
 
 on:
   push:
-    branches: [ "main", "dockertest" ]
+    branches: [ "dockertest" ]
   create:
     tags:
-      - v*
   workflow_dispatch:
 
 env:
@@ -62,5 +61,5 @@ jobs:
           file: docker/Dockerfile
           tags: |
             ghcr.io/pawbsocial/lemmy:${{ steps.git_info.outputs.branch }}.${{ steps.git_info.outputs.sha_short }}
-            ghcr.io/pawbsocial/lemmy:${{ steps.git_info.outputs.branch }}.latest
+            ghcr.io/pawbsocial/lemmy:${{ steps.git_info.outputs.branch }}
           labels: ${{ steps.meta.outputs.labels }}
