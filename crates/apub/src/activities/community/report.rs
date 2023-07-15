@@ -1,6 +1,6 @@
 use crate::{
   activities::{generate_activity_id, send_lemmy_activity, verify_person_in_community},
-  insert_activity,
+  insert_received_activity,
   objects::{community::ApubCommunity, person::ApubPerson},
   protocol::{activities::community::report::Report, InCommunity},
   PostOrComment,
@@ -115,6 +115,7 @@ impl ActivityHandler for Report {
 
   #[tracing::instrument(skip_all)]
   async fn verify(&self, context: &Data<Self::DataType>) -> Result<(), LemmyError> {
+    insert_received_activity(&self.id, context).await?;
     let community = self.community(context).await?;
     verify_person_in_community(&self.actor, &community, context).await?;
     Ok(())
@@ -122,7 +123,6 @@ impl ActivityHandler for Report {
 
   #[tracing::instrument(skip_all)]
   async fn receive(self, context: &Data<Self::DataType>) -> Result<(), LemmyError> {
-    insert_activity(&self.id, &self, false, true, context).await?;
     let actor = self.actor.dereference(context).await?;
     match self.object.dereference(context).await? {
       PostOrComment::Post(post) => {
@@ -134,7 +134,7 @@ impl ActivityHandler for Report {
           reason: self.summary,
           original_post_body: post.body.clone(),
         };
-        PostReport::report(context.pool(), &report_form).await?;
+        PostReport::report(&mut context.pool(), &report_form).await?;
       }
       PostOrComment::Comment(comment) => {
         let report_form = CommentReportForm {
@@ -143,7 +143,7 @@ impl ActivityHandler for Report {
           original_comment_text: comment.content.clone(),
           reason: self.summary,
         };
-        CommentReport::report(context.pool(), &report_form).await?;
+        CommentReport::report(&mut context.pool(), &report_form).await?;
       }
     };
     Ok(())

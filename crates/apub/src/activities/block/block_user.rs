@@ -9,7 +9,7 @@ use crate::{
     verify_person_in_community,
   },
   activity_lists::AnnouncableActivities,
-  insert_activity,
+  insert_received_activity,
   objects::{instance::remote_instance_inboxes, person::ApubPerson},
   protocol::activities::block::block_user::BlockUser,
 };
@@ -60,7 +60,7 @@ impl BlockUser {
       actor: mod_.id().into(),
       to: vec![public()],
       object: user.id().into(),
-      cc: generate_cc(target, context.pool()).await?,
+      cc: generate_cc(target, &mut context.pool()).await?,
       target: target.id(),
       kind: BlockType::Block,
       remove_data,
@@ -97,7 +97,7 @@ impl BlockUser {
 
     match target {
       SiteOrCommunity::Site(_) => {
-        let inboxes = remote_instance_inboxes(context.pool()).await?;
+        let inboxes = remote_instance_inboxes(&mut context.pool()).await?;
         send_lemmy_activity(context, block, mod_, inboxes, false).await
       }
       SiteOrCommunity::Community(c) => {
@@ -124,6 +124,7 @@ impl ActivityHandler for BlockUser {
 
   #[tracing::instrument(skip_all)]
   async fn verify(&self, context: &Data<LemmyContext>) -> Result<(), LemmyError> {
+    insert_received_activity(&self.id, context).await?;
     verify_is_public(&self.to, &self.cc)?;
     match self.target.dereference(context).await? {
       SiteOrCommunity::Site(site) => {
@@ -147,7 +148,6 @@ impl ActivityHandler for BlockUser {
 
   #[tracing::instrument(skip_all)]
   async fn receive(self, context: &Data<LemmyContext>) -> Result<(), LemmyError> {
-    insert_activity(&self.id, &self, false, false, context).await?;
     let expires = self.expires.map(|u| u.naive_local());
     let mod_person = self.actor.dereference(context).await?;
     let blocked_person = self.object.dereference(context).await?;
@@ -155,7 +155,7 @@ impl ActivityHandler for BlockUser {
     match target {
       SiteOrCommunity::Site(_site) => {
         let blocked_person = Person::update(
-          context.pool(),
+          &mut context.pool(),
           blocked_person.id,
           &PersonUpdateForm::builder()
             .banned(Some(true))
@@ -166,7 +166,7 @@ impl ActivityHandler for BlockUser {
         if self.remove_data.unwrap_or(false) {
           remove_user_data(
             blocked_person.id,
-            context.pool(),
+            &mut context.pool(),
             context.settings(),
             context.client(),
           )
@@ -181,7 +181,7 @@ impl ActivityHandler for BlockUser {
           banned: Some(true),
           expires,
         };
-        ModBan::create(context.pool(), &form).await?;
+        ModBan::create(&mut context.pool(), &form).await?;
       }
       SiteOrCommunity::Community(community) => {
         let community_user_ban_form = CommunityPersonBanForm {
@@ -189,7 +189,7 @@ impl ActivityHandler for BlockUser {
           person_id: blocked_person.id,
           expires: Some(expires),
         };
-        CommunityPersonBan::ban(context.pool(), &community_user_ban_form).await?;
+        CommunityPersonBan::ban(&mut context.pool(), &community_user_ban_form).await?;
 
         // Also unsubscribe them from the community, if they are subscribed
         let community_follower_form = CommunityFollowerForm {
@@ -197,12 +197,13 @@ impl ActivityHandler for BlockUser {
           person_id: blocked_person.id,
           pending: false,
         };
-        CommunityFollower::unfollow(context.pool(), &community_follower_form)
+        CommunityFollower::unfollow(&mut context.pool(), &community_follower_form)
           .await
           .ok();
 
         if self.remove_data.unwrap_or(false) {
-          remove_user_data_in_community(community.id, blocked_person.id, context.pool()).await?;
+          remove_user_data_in_community(community.id, blocked_person.id, &mut context.pool())
+            .await?;
         }
 
         // write to mod log
@@ -214,7 +215,7 @@ impl ActivityHandler for BlockUser {
           banned: Some(true),
           expires,
         };
-        ModBanFromCommunity::create(context.pool(), &form).await?;
+        ModBanFromCommunity::create(&mut context.pool(), &form).await?;
       }
     }
 
